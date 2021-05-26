@@ -1,8 +1,6 @@
 import psycopg2
 from environs import Env
 
-# from datetime import datetime as dt
-
 # ------------------------------
 
 env = Env()
@@ -42,7 +40,7 @@ class DbConnection:
                 self.conn.commit()
 
         except psycopg2.Error as error:
-            print(error)
+            print("Erro na criação da tabela:", error)
             self.conn.close()
 
             return {"error": "create table error"}
@@ -70,7 +68,8 @@ class DbConnection:
                 self.conn.commit()
 
                 new_serie = dict(zip(self.fieldnames, query))
-                # new_serie["released_date"] = dt.strftime(new_serie.get("released_date", "%d/%m/%Y"))
+                serie_date = new_serie.get("released_date")
+                new_serie["released_date"] = serie_date.strftime("%d/%m/%Y")
 
                 return new_serie
 
@@ -100,8 +99,9 @@ class DbConnection:
                 query = cursor.fetchall()
 
                 series_list = [dict(zip(self.fieldnames, serie)) for serie in query]
-                # for serie in series_list:
-                # serie["released_date"] = dt.strftime(serie.get("released_date", "%d/%m/%Y"))
+                for serie in series_list:
+                    serie_date = serie.get("released_date")
+                    serie["released_date"] = serie_date.strftime("%d/%m/%Y")
 
                 return series_list
 
@@ -133,7 +133,8 @@ class DbConnection:
                 query = cursor.fetchone()
 
                 serie = dict(zip(self.fieldnames, query))
-                # serie["released_date"] = dt.strftime(serie.get("released_date", "%d/%m/%Y"))
+                serie_date = serie.get("released_date")
+                serie["released_date"] = serie_date.strftime("%d/%m/%Y")
 
                 return serie
 
