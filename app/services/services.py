@@ -1,189 +1,150 @@
 import psycopg2
+from environs import Env
+
+# from datetime import datetime as dt
+
+# ------------------------------
+
+env = Env()
+env.read_env()
 
 # ------------------------------
 
 
 class DbConnection:
+    fieldnames = ["id", "serie", "seasons", "released_date", "genre", "imdb_rating"]
+
     def __init__(self) -> None:
         try:
-            self.conn = psycopg2.connect(host="localhost", database="kenzie", user="ximitti", password="4282")
-            self.is_conn = True
+            self.conn = psycopg2.connect(
+                host=env("host"), database=env("database"), user=env("user"), password=env("password")
+            )
         except (Exception, psycopg2.Error) as error:
-            print(error)
-            self.is_conn = False
+            print("Erro de conexão com database:", error)
 
     # -------------------------------
-    def create_register(self, serie: dict) -> dict:
-        cursor = self.conn.cursor()
-
+    def _create_table(self) -> None:
         try:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS ka_series(
-                    id BIGSERIAL PRIMARY KEY,
-                    serie VARCHAR(100) NOT NULL UNIQUE,
-                    seasons INTEGER NOT NULL,
-                    released_date DATE NOT NULL,
-                    genre VARCHAR(50) NOT NULL,
-                    imdb_rating FLOAT NOT NULL
-                );
-                """
-            )
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ka_series(
+                        id BIGSERIAL PRIMARY KEY,
+                        serie VARCHAR(100) NOT NULL UNIQUE,
+                        seasons INTEGER NOT NULL,
+                        released_date DATE NOT NULL,
+                        genre VARCHAR(50) NOT NULL,
+                        imdb_rating FLOAT NOT NULL
+                    );
+                    """
+                )
 
-            self.conn.commit()
+                self.conn.commit()
 
-        except (Exception, psycopg2.Error) as error:
+        except psycopg2.Error as error:
             print(error)
-            cursor.close()
             self.conn.close()
 
             return {"error": "create table error"}
 
+    # -------------------------------
+    def create_register(self, serie: dict) -> dict:
+
+        self._create_table()
+
         try:
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO ka_series
+                        (serie, seasons, released_date, genre, imdb_rating)
+                    VALUES
+                        (%(serie)s,%(seasons)s,%(released_date)s,%(genre)s,%(imdb_rating)s)
+                    RETURNING *;
+                    """,
+                    serie,
+                )
 
-            data = [v for v in serie.values()]
+                query = cursor.fetchone()
 
-            cursor.execute(
-                """
-                INSERT INTO ka_series
-                    (serie, seasons, released_date, genre, imdb_rating)
-                VALUES
-                    (%s,%s,%s,%s,%s);
-                """,
-                data,
-            )
+                self.conn.commit()
 
-            cursor.execute(
-                """
-                SELECT * FROM ka_series
-                WHERE serie LIKE %s;
-                """,
-                serie.get("serie"),
-            )
+                new_serie = dict(zip(self.fieldnames, query))
+                # new_serie["released_date"] = dt.strftime(new_serie.get("released_date", "%d/%m/%Y"))
 
-            insert_data = cursor.fetchone()
-
-            self.conn.commit()
-
-            cursor.close()
-            self.conn.close()
-
-            return {
-                "id": insert_data[0],
-                "serie": insert_data[1],
-                "seasons": insert_data[2],
-                "released_date": insert_data[3],
-                "genre": insert_data[4],
-                "imdb_rating": insert_data[5],
-            }
+                return new_serie
 
         except (Exception, psycopg2.Error) as error:
-            print(error)
-            cursor.close()
+            print("Erro ao criar registro:", error)
             self.conn.close()
 
-            return {"error": "create register error"}
+            return {"error": "create register"}
+
+        finally:
+            self.conn.close()
 
     # -----------------------------------------
 
     def select_all_series(self) -> list:
-        cursor = self.conn.cursor()
+
+        self._create_table()
 
         try:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS ka_series(
-                    id BIGSERIAL PRIMARY KEY,
-                    serie VARCHAR(100) NOT NULL UNIQUE,
-                    seasons INTEGER NOT NULL,
-                    released_date DATE NOT NULL,
-                    genre VARCHAR(50) NOT NULL,
-                    imdb_rating FLOAT NOT NULL
-                );
-                """
-            )
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT * FROM ka_series;
+                    """
+                )
 
-            self.conn.commit()
+                query = cursor.fetchall()
 
-        except (Exception, psycopg2.Error) as error:
-            print(error)
-            cursor.close()
-            self.conn.close()
+                series_list = [dict(zip(self.fieldnames, serie)) for serie in query]
+                # for serie in series_list:
+                # serie["released_date"] = dt.strftime(serie.get("released_date", "%d/%m/%Y"))
 
-            return {"error": "create table error"}
-
-        try:
-            cursor.execute(
-                """
-                SELECT * FROM ka_series;
-                """
-            )
-
-            series_list = cursor.fetchall()
-
-            cursor.close()
-            self.conn.close()
-
-            return series_list
+                return series_list
 
         except (Exception, psycopg2.Error) as error:
-            print(error)
-            cursor.close()
+            print("erro ao selecionar todos os registros:", error)
             self.conn.close()
 
             return []
 
+        finally:
+            self.conn.close()
+
     # ---------------------------
 
     def select_serie(self, serie_id: int) -> dict:
-        cursor = self.conn.cursor()
+
+        self._create_table()
 
         try:
-            cursor.execute(
-                """
-                CREATE TABLE IF NOT EXISTS ka_series(
-                    id BIGSERIAL PRIMARY KEY,
-                    serie VARCHAR(100) NOT NULL UNIQUE,
-                    seasons INTEGER NOT NULL,
-                    released_date DATE NOT NULL,
-                    genre VARCHAR(50) NOT NULL,
-                    imdb_rating FLOAT NOT NULL
-                );
-                """
-            )
+            with self.conn.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT * FROM ka_series
+                    WHERE id = %s;
+                    """,
+                    (serie_id,),
+                )
 
-            self.conn.commit()
+                query = cursor.fetchone()
 
-        except (Exception, psycopg2.Error) as error:
-            print(error)
-            cursor.close()
-            self.conn.close()
+                serie = dict(zip(self.fieldnames, query))
+                # serie["released_date"] = dt.strftime(serie.get("released_date", "%d/%m/%Y"))
 
-            return {"error": "create table error"}
-
-        try:
-            print("parametro de entrada:", serie_id)
-            cursor.execute(
-                """
-                SELECT * FROM ka_series
-                WHERE id = %s;
-                """,
-                [serie_id],
-            )
-
-            serie = cursor.fetchone()
-
-            cursor.close()
-            self.conn.close()
-
-            return serie
+                return serie
 
         except (Exception, psycopg2.Error) as error:
             print("erro ao pegar por id:", error)
-            cursor.close()
             self.conn.close()
 
             return {"error": "Not Found"}
+
+        finally:
+            self.conn.close()
 
 
 # -------------------------------------------
@@ -205,7 +166,5 @@ class CallServices:
     @staticmethod
     def select_serie_by_id(serie_id: int) -> dict:
         db_conn = DbConnection()
-
-        print("parametro no service:", serie_id)
 
         return db_conn.select_serie(serie_id)
