@@ -52,6 +52,9 @@ class TabelaKaSeries:
 
         try:
             with self.conn.cursor() as cursor:
+                serie["serie"] = serie["serie"].title()
+                serie["genre"] = serie["genre"].title()
+
                 cursor.execute(
                     """
                     INSERT INTO ka_series
